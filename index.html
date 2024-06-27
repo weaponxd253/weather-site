@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weather App</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/awesomplete/1.1.5/awesomplete.min.css">
+</head>
+<body>
+    <header>
+        <h1>Weather App</h1>
+        <button id="theme-switcher" aria-label="Switch Theme">Switch Theme</button>
+    </header>
+    <main>
+        <div id="weather-container">
+            <label for="city-input">Enter city name</label>
+            <input type="text" id="city-input" class="awesomplete" placeholder="Enter city name" aria-describedby="city-input-desc">
+            <div id="city-input-desc" class="sr-only">Start typing a city name and select from the suggestions.</div>
+            <div id="loading-suggestions-spinner" class="spinner" role="status" aria-live="polite">
+                <span class="sr-only">Loading suggestions...</span>
+            </div>
+            <button id="get-weather" aria-label="Get Weather">Get Weather</button>
+            <div id="loading-spinner" class="spinner" role="status" aria-live="polite">
+                <span class="sr-only">Loading...</span>
+            </div>
+            <div id="weather-info" aria-live="polite">
+                <img id="weather-icon" alt="Weather Icon">
+                <p>Temperature: <span id="temperature"></span> <button class="tooltip" aria-describedby="temp-desc">?</button></p>
+                <div id="temp-desc" class="sr-only">Current temperature in Celsius and Fahrenheit.</div>
+                <p>Weather: <span id="weather"></span></p>
+                <p>Humidity: <span id="humidity"></span> <button class="tooltip" aria-describedby="humidity-desc">?</button></p>
+                <div id="humidity-desc" class="sr-only">Current humidity percentage.</div>
+                <p>Wind Speed: <span id="wind-speed"></span> <button class="tooltip" aria-describedby="wind-speed-desc">?</button></p>
+                <div id="wind-speed-desc" class="sr-only">Current wind speed in meters per second and miles per hour.</div>
+                <p>Sunrise: <span id="sunrise"></span></p>
+                <p>Sunset: <span id="sunset"></span></p>
+            </div>
+            <div id="forecast-container">
+                <h2>5-Day Forecast</h2>
+                <div id="forecast"></div>
+            </div>
+            <div id="error-message" role="alert" aria-live="assertive"></div>
+        </div>
+        <div id="popup" class="popup hidden" role="dialog" aria-modal="true">
+            <div id="popup-content">
+                <button id="popup-close" aria-label="Close">&times;</button>
+                <p id="popup-text"></p>
+            </div>
+        </div>
+    </main>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/awesomplete/1.1.5/awesomplete.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.10.4/gsap.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
