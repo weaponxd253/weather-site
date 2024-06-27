@@ -183,7 +183,7 @@ button:active {
 }
 
 .tooltip:hover::after {
-    content: attr(data-tooltip);
+    content: attr(aria-label);
     position: absolute;
     bottom: 125%;
     left: 50%;

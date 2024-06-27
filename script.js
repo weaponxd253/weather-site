@@ -194,33 +194,4 @@ document.addEventListener('DOMContentLoaded', function() {
             errorMessage.classList.remove('visible');
         }, 5000);
     }
-
-    // Event listener for tooltips
-    document.querySelectorAll('.tooltip').forEach(item => {
-        item.addEventListener('click', event => {
-            const tooltipText = event.target.getAttribute('data-tooltip');
-            showPopup(tooltipText);
-        });
-    });
-
-    // Event listener for popup close
-    document.getElementById('popup-close').addEventListener('click', () => {
-        hidePopup();
-    });
-
-    function showPopup(message) {
-        const popup = document.getElementById('popup');
-        const popupText = document.getElementById('popup-text');
-        popupText.textContent = message;
-        popup.classList.remove('hidden');
-    }
-
-    function hidePopup() {
-        const popup = document.getElementById('popup');
-        popup.classList.add('hidden');
-    }
 });
-
-// GSAP Animations for input and button
-gsap.from('#city-input', {duration: 1, x: -300, opacity: 0, ease: 'power2.out'});
-gsap.from('#get-weather', {duration: 1, x: 300, opacity: 0, ease: 'power2.out', delay: 0.5});
