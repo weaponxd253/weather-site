@@ -8,6 +8,13 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/awesomplete/1.1.5/awesomplete.min.css">
 </head>
 <body>
+    <div id="splash-screen" class="splash-screen">
+        <div class="splash-content">
+            <h1>Welcome to the Weather App</h1>
+            <div class="splash-spinner spinner"></div>
+        </div>
+    </div>
+    
     <header>
         <h1>Weather App</h1>
         <button id="theme-switcher" aria-label="Switch Theme">Switch Theme</button>
@@ -38,6 +45,11 @@
                 <div id="forecast"></div>
             </div>
             <div id="error-message" role="alert" aria-live="assertive"></div>
+        </div>
+        <div id="confirmation-container" class="hidden">
+            <p id="confirmation-message"></p>
+            <button id="confirmation-yes">Yes</button>
+            <button id="confirmation-no">No</button>
         </div>
         <div id="popup" class="popup hidden" role="dialog" aria-modal="true">
             <div id="popup-content">

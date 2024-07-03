@@ -7,6 +7,43 @@ body {
     padding: 20px;
 }
 
+.splash-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: #333;
+    color: #fff;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.splash-screen.hidden {
+    display: none;
+}
+
+.splash-content {
+    text-align: center;
+}
+
+.splash-spinner {
+    border: 4px solid rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+    border-top-color: #fff;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
 body.dark-mode {
     background-color: #333;
     color: #fff;
@@ -270,4 +307,13 @@ body.dark-mode .tooltip:hover::after {
     #weather-info, #forecast-container, #popup-content {
         padding: 10px;
     }
+}
+
+#confirmation-container {
+    display: none;
+    margin-top: 20px;
+}
+
+#confirmation-container.visible {
+    display: block;
 }

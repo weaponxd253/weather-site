@@ -1,6 +1,22 @@
 document.addEventListener('DOMContentLoaded', function() {
     const apiKey = '1888b231e8cf712ed8c8809887434fe5';
-    
+    const splashScreen = document.getElementById('splash-screen');
+    const confirmationContainer = document.getElementById('confirmation-container');
+    const confirmationMessage = document.getElementById('confirmation-message');
+    const confirmationYes = document.getElementById('confirmation-yes');
+    const confirmationNo = document.getElementById('confirmation-no');
+    let confirmedLocation = null;
+
+    function hideSplashScreen() {
+        splashScreen.classList.add('hidden');
+    }
+
+    // Show the splash screen when the page loads
+    splashScreen.classList.remove('hidden');
+
+    // Fallback: hide the splash screen after 5 seconds in case of an error
+    setTimeout(hideSplashScreen, 5000);
+
     const states = {
         'AL': 'Alabama', 'AK': 'Alaska', 'AZ': 'Arizona', 'AR': 'Arkansas', 'CA': 'California', 'CO': 'Colorado', 
         'CT': 'Connecticut', 'DE': 'Delaware', 'FL': 'Florida', 'GA': 'Georgia', 'HI': 'Hawaii', 'ID': 'Idaho', 
@@ -45,7 +61,10 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .then(data => {
                 console.log('City suggestions fetched:', data);
-                const suggestions = data.map(city => `${city.name}, ${city.state ? city.state + ', ' : ''}${city.country}`);
+                const suggestions = data.map(city => {
+                    let state = city.state ? states[city.state.toUpperCase()] : '';
+                    return `${city.name}, ${state ? state + ', ' : ''}${city.country}`;
+                });
                 stateAbbreviations.forEach(abbr => {
                     suggestions.push(`${abbr}`);
                     suggestions.push(`${states[abbr]}`);
@@ -75,16 +94,36 @@ document.addEventListener('DOMContentLoaded', function() {
         if (parts.length === 1) {
             location = parts[0];
         } else if (parts.length === 2) {
+            const cityPart = parts[0];
             const statePart = parts[1];
-            if (stateAbbreviations.includes(statePart) || stateNamesLower.includes(statePart.toLowerCase())) {
-                const stateAbbr = stateAbbreviations.includes(statePart) ? statePart : stateAbbreviations[stateNamesLower.indexOf(statePart.toLowerCase())];
-                location = `${parts[0]},${stateAbbr},US`;
+            if (stateAbbreviations.includes(statePart.toUpperCase()) || stateNamesLower.includes(statePart.toLowerCase())) {
+                const stateAbbr = stateAbbreviations.includes(statePart.toUpperCase()) ? statePart.toUpperCase() : stateAbbreviations[stateNamesLower.indexOf(statePart.toLowerCase())];
+                location = `${cityPart},${stateAbbr},US`;
             } else {
                 displayError("Please enter a valid city name and optionally a valid state abbreviation or name.");
                 return;
             }
+        } else if (parts.length === 3) {
+            const cityPart = parts[0];
+            const statePart = parts[1];
+            const countryPart = parts[2];
+            if ((stateAbbreviations.includes(statePart.toUpperCase()) || stateNamesLower.includes(statePart.toLowerCase())) && countryPart.toUpperCase() === 'US') {
+                const stateAbbr = stateAbbreviations.includes(statePart.toUpperCase()) ? statePart.toUpperCase() : stateAbbreviations[stateNamesLower.indexOf(statePart.toLowerCase())];
+                location = `${cityPart},${stateAbbr},${countryPart}`;
+            } else {
+                displayError("Please enter a valid city name, state abbreviation, and country code.");
+                return;
+            }
         } else {
             displayError("Please enter a valid city name and optionally a valid state abbreviation or name.");
+            return;
+        }
+
+        // If location is not confirmed yet, show the confirmation container
+        if (!confirmedLocation || confirmedLocation !== location) {
+            confirmationMessage.textContent = `Did you mean: ${location}?`;
+            confirmationContainer.classList.add('visible');
+            confirmedLocation = location;
             return;
         }
 
@@ -103,6 +142,7 @@ document.addEventListener('DOMContentLoaded', function() {
             })))
             .then(data => {
                 displayLoading(false);
+                hideSplashScreen();
                 const [dataMetric, dataImperial] = data;
                 console.log('Weather data fetched:', dataMetric, dataImperial);
 
@@ -141,6 +181,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
     document.getElementById('theme-switcher').addEventListener('click', function() {
         toggleTheme();
+    });
+
+    confirmationYes.addEventListener('click', function() {
+        confirmationContainer.classList.remove('visible');
+        document.getElementById('get-weather').click();
+    });
+
+    confirmationNo.addEventListener('click', function() {
+        confirmationContainer.classList.remove('visible');
+        confirmedLocation = null;
     });
 
     function fetchForecast(lat, lon) {
