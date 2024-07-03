@@ -1,5 +1,21 @@
 document.addEventListener('DOMContentLoaded', function() {
-    const apiKey = '1888b231e8cf712ed8c8809887434fe5'; 
+    const apiKey = '1888b231e8cf712ed8c8809887434fe5';
+    
+    const states = {
+        'AL': 'Alabama', 'AK': 'Alaska', 'AZ': 'Arizona', 'AR': 'Arkansas', 'CA': 'California', 'CO': 'Colorado', 
+        'CT': 'Connecticut', 'DE': 'Delaware', 'FL': 'Florida', 'GA': 'Georgia', 'HI': 'Hawaii', 'ID': 'Idaho', 
+        'IL': 'Illinois', 'IN': 'Indiana', 'IA': 'Iowa', 'KS': 'Kansas', 'KY': 'Kentucky', 'LA': 'Louisiana', 
+        'ME': 'Maine', 'MD': 'Maryland', 'MA': 'Massachusetts', 'MI': 'Michigan', 'MN': 'Minnesota', 'MS': 'Mississippi', 
+        'MO': 'Missouri', 'MT': 'Montana', 'NE': 'Nebraska', 'NV': 'Nevada', 'NH': 'New Hampshire', 'NJ': 'New Jersey', 
+        'NM': 'New Mexico', 'NY': 'New York', 'NC': 'North Carolina', 'ND': 'North Dakota', 'OH': 'Ohio', 'OK': 'Oklahoma', 
+        'OR': 'Oregon', 'PA': 'Pennsylvania', 'RI': 'Rhode Island', 'SC': 'South Carolina', 'SD': 'South Dakota', 
+        'TN': 'Tennessee', 'TX': 'Texas', 'UT': 'Utah', 'VT': 'Vermont', 'VA': 'Virginia', 'WA': 'Washington', 
+        'WV': 'West Virginia', 'WI': 'Wisconsin', 'WY': 'Wyoming'
+    };
+    const stateAbbreviations = Object.keys(states);
+    const stateNames = Object.values(states);
+    const stateNamesLower = stateNames.map(name => name.toLowerCase());
+
     const awesomplete = new Awesomplete(document.getElementById("city-input"), {
         minChars: 1,
         autoFirst: true
@@ -10,7 +26,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const query = this.value.trim();
         clearTimeout(debounceTimer);
         if (query.length >= 1) {
-            debounceTimer = setTimeout(() => fetchCitySuggestions(query), 300); 
+            debounceTimer = setTimeout(() => fetchCitySuggestions(query), 300);
         }
     });
 
@@ -30,6 +46,10 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(data => {
                 console.log('City suggestions fetched:', data);
                 const suggestions = data.map(city => `${city.name}, ${city.state ? city.state + ', ' : ''}${city.country}`);
+                stateAbbreviations.forEach(abbr => {
+                    suggestions.push(`${abbr}`);
+                    suggestions.push(`${states[abbr]}`);
+                });
                 awesomplete.list = suggestions;
                 showLoadingSuggestions(false);
             })
@@ -44,16 +64,33 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     document.getElementById('get-weather').addEventListener('click', function() {
-        const city = document.getElementById('city-input').value.trim();
-        if (city === "") {
+        const input = document.getElementById('city-input').value.trim();
+        if (input === "") {
             displayError("Please enter a city name.");
             return;
         }
 
-        const apiKey = '1888b231e8cf712ed8c8809887434fe5'; 
-        const apiUrlMetric = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${apiKey}&units=metric`;
-        const apiUrlImperial = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${apiKey}&units=imperial`;
-        console.log('Fetching weather data from URL:', apiUrlMetric, apiUrlImperial); // Debug information
+        let location;
+        const parts = input.split(',').map(part => part.trim());
+        if (parts.length === 1) {
+            location = parts[0];
+        } else if (parts.length === 2) {
+            const statePart = parts[1];
+            if (stateAbbreviations.includes(statePart) || stateNamesLower.includes(statePart.toLowerCase())) {
+                const stateAbbr = stateAbbreviations.includes(statePart) ? statePart : stateAbbreviations[stateNamesLower.indexOf(statePart.toLowerCase())];
+                location = `${parts[0]},${stateAbbr},US`;
+            } else {
+                displayError("Please enter a valid city name and optionally a valid state abbreviation or name.");
+                return;
+            }
+        } else {
+            displayError("Please enter a valid city name and optionally a valid state abbreviation or name.");
+            return;
+        }
+
+        const apiUrlMetric = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(location)}&appid=${apiKey}&units=metric`;
+        const apiUrlImperial = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(location)}&appid=${apiKey}&units=imperial`;
+        console.log('Fetching weather data from URL:', apiUrlMetric, apiUrlImperial);
 
         displayLoading(true);
 
@@ -67,17 +104,17 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(data => {
                 displayLoading(false);
                 const [dataMetric, dataImperial] = data;
-                console.log('Weather data fetched:', dataMetric, dataImperial); 
+                console.log('Weather data fetched:', dataMetric, dataImperial);
 
                 // Convert UNIX timestamp to local time
                 const sunrise = new Date(dataMetric.sys.sunrise * 1000).toLocaleTimeString();
                 const sunset = new Date(dataMetric.sys.sunset * 1000).toLocaleTimeString();
 
-                document.getElementById('temperature').innerHTML = 
+                document.getElementById('temperature').innerHTML =
                     `<span class="temperature">${dataMetric.main.temp}°C</span> / <span class="temperature">${dataImperial.main.temp}°F</span>`;
                 document.getElementById('weather').textContent = dataMetric.weather[0].description;
                 document.getElementById('humidity').textContent = dataMetric.main.humidity + '%';
-                document.getElementById('wind-speed').innerHTML = 
+                document.getElementById('wind-speed').innerHTML =
                     `<span class="temperature">${dataMetric.wind.speed} m/s</span> / <span class="temperature">${dataImperial.wind.speed} mph</span>`;
                 document.getElementById('sunrise').textContent = sunrise;
                 document.getElementById('sunset').textContent = sunset;
@@ -107,10 +144,10 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     function fetchForecast(lat, lon) {
-        const apiKey = '1888b231e8cf712ed8c8809887434fe5'; 
+        const apiKey = '1888b231e8cf712ed8c8809887434fe5';
         const apiUrlMetric = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric`;
         const apiUrlImperial = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${apiKey}&units=imperial`;
-        console.log('Fetching forecast data from URL:', apiUrlMetric, apiUrlImperial); // Debug information
+        console.log('Fetching forecast data from URL:', apiUrlMetric, apiUrlImperial);
 
         Promise.all([fetch(apiUrlMetric), fetch(apiUrlImperial)])
             .then(responses => Promise.all(responses.map(response => {
@@ -121,7 +158,7 @@ document.addEventListener('DOMContentLoaded', function() {
             })))
             .then(data => {
                 const [dataMetric, dataImperial] = data;
-                console.log('Forecast data fetched:', dataMetric, dataImperial); // Debug information
+                console.log('Forecast data fetched:', dataMetric, dataImperial);
 
                 const forecastContainer = document.getElementById('forecast');
                 forecastContainer.innerHTML = '';
