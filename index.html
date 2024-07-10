@@ -8,10 +8,10 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/awesomplete/1.1.5/awesomplete.min.css">
 </head>
 <body>
-    <div id="splash-screen" class="splash-screen">
+    <div id="splash-screen" class="splash-screen" role="alert">
         <div class="splash-content">
-            <h1>Welcome Weather X</h1>
-            <div class="splash-spinner spinner"></div>
+            <h1>Welcome to the Weather App</h1>
+            <div class="splash-spinner spinner" aria-label="Loading..."></div>
         </div>
     </div>
     
@@ -56,6 +56,11 @@
                 <button id="popup-close" aria-label="Close">&times;</button>
                 <p id="popup-text"></p>
             </div>
+        </div>
+        <div id="geolocation-permission" class="hidden">
+            <p>Would you like to allow geolocation to automatically find your location?</p>
+            <button id="geolocation-allow">Allow</button>
+            <button id="geolocation-deny">Deny</button>
         </div>
     </main>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/awesomplete/1.1.5/awesomplete.min.js"></script>

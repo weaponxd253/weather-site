@@ -5,6 +5,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const confirmationMessage = document.getElementById('confirmation-message');
     const confirmationYes = document.getElementById('confirmation-yes');
     const confirmationNo = document.getElementById('confirmation-no');
+    const geolocationPermission = document.getElementById('geolocation-permission');
+    const geolocationAllow = document.getElementById('geolocation-allow');
+    const geolocationDeny = document.getElementById('geolocation-deny');
     let confirmedLocation = null;
 
     function hideSplashScreen() {
@@ -249,5 +252,31 @@ document.addEventListener('DOMContentLoaded', function() {
         setTimeout(() => {
             errorMessage.classList.remove('visible');
         }, 5000);
+    }
+
+    // Geolocation
+    if (navigator.geolocation) {
+        geolocationPermission.classList.remove('hidden');
+        geolocationAllow.addEventListener('click', function() {
+            geolocationPermission.classList.add('hidden');
+            navigator.geolocation.getCurrentPosition(
+                function(position) {
+                    const lat = position.coords.latitude;
+                    const lon = position.coords.longitude;
+                    fetchWeatherData({ lat, lon });
+                },
+                function(error) {
+                    console.error('Error fetching geolocation:', error);
+                    displayError('Geolocation permission denied. Please enter your city manually.');
+                }
+            );
+        });
+
+        geolocationDeny.addEventListener('click', function() {
+            geolocationPermission.classList.add('hidden');
+            displayError('Geolocation permission denied. Please enter your city manually.');
+        });
+    } else {
+        displayError('Geolocation is not supported by this browser. Please enter your city manually.');
     }
 });

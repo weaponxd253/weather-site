@@ -74,6 +74,12 @@ body.snowy-theme {
     color: #fff;
     cursor: pointer;
     border-radius: 5px;
+    transition: background-color 0.3s, transform 0.3s;
+}
+
+#theme-switcher:hover {
+    background-color: #555;
+    transform: scale(1.05);
 }
 
 #weather-container {
@@ -316,4 +322,45 @@ body.dark-mode .tooltip:hover::after {
 
 #confirmation-container.visible {
     display: block;
+}
+
+#geolocation-permission {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+#geolocation-permission.hidden {
+    display: none;
+}
+
+#geolocation-allow, #geolocation-deny {
+    margin: 10px;
+    padding: 10px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+#geolocation-allow {
+    background-color: #28a745;
+    color: #fff;
+}
+
+#geolocation-allow:hover {
+    background-color: #218838;
+}
+
+#geolocation-deny {
+    background-color: #dc3545;
+    color: #fff;
+}
+
+#geolocation-deny:hover {
+    background-color: #c82333;
 }
