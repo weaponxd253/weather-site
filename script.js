@@ -11,10 +11,7 @@ document.addEventListener('DOMContentLoaded', function() {
         splashScreen.classList.add('hidden');
     }
 
-    // Show the splash screen when the page loads
     splashScreen.classList.remove('hidden');
-
-    // Fallback: hide the splash screen after 5 seconds in case of an error
     setTimeout(hideSplashScreen, 5000);
 
     const states = {
@@ -53,23 +50,17 @@ document.addEventListener('DOMContentLoaded', function() {
         showLoadingSuggestions(true);
 
         fetch(url)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`Network response was not ok: ${response.statusText}`);
-                }
-                return response.json();
-            })
+            .then(response => response.json())
             .then(data => {
-                console.log('City suggestions fetched:', data);
                 const suggestions = data.map(city => {
                     let state = city.state ? states[city.state.toUpperCase()] : '';
-                    return `${city.name}, ${state ? state + ', ' : ''}${city.country}`;
+                    return {
+                        label: `${city.name}, ${state ? state + ', ' : ''}${city.country}`,
+                        value: city
+                    };
                 });
-                stateAbbreviations.forEach(abbr => {
-                    suggestions.push(`${abbr}`);
-                    suggestions.push(`${states[abbr]}`);
-                });
-                awesomplete.list = suggestions;
+                awesomplete.list = suggestions.map(s => s.label);
+                awesomplete.data = suggestions;
                 showLoadingSuggestions(false);
             })
             .catch(error => {
@@ -89,99 +80,78 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        let location;
-        const parts = input.split(',').map(part => part.trim());
-        if (parts.length === 1) {
-            location = parts[0];
-        } else if (parts.length === 2) {
-            const cityPart = parts[0];
-            const statePart = parts[1];
-            if (stateAbbreviations.includes(statePart.toUpperCase()) || stateNamesLower.includes(statePart.toLowerCase())) {
-                const stateAbbr = stateAbbreviations.includes(statePart.toUpperCase()) ? statePart.toUpperCase() : stateAbbreviations[stateNamesLower.indexOf(statePart.toLowerCase())];
-                location = `${cityPart},${stateAbbr},US`;
-            } else {
-                displayError("Please enter a valid city name and optionally a valid state abbreviation or name.");
-                return;
-            }
-        } else if (parts.length === 3) {
-            const cityPart = parts[0];
-            const statePart = parts[1];
-            const countryPart = parts[2];
-            if ((stateAbbreviations.includes(statePart.toUpperCase()) || stateNamesLower.includes(statePart.toLowerCase())) && countryPart.toUpperCase() === 'US') {
-                const stateAbbr = stateAbbreviations.includes(statePart.toUpperCase()) ? statePart.toUpperCase() : stateAbbreviations[stateNamesLower.indexOf(statePart.toLowerCase())];
-                location = `${cityPart},${stateAbbr},${countryPart}`;
-            } else {
-                displayError("Please enter a valid city name, state abbreviation, and country code.");
-                return;
-            }
+        let selectedCity = awesomplete.data.find(s => s.label === input);
+        if (!selectedCity) {
+            fetchDirectCity(input);
         } else {
-            displayError("Please enter a valid city name and optionally a valid state abbreviation or name.");
-            return;
+            fetchWeatherData(selectedCity.value);
         }
+    });
 
-        // If location is not confirmed yet, show the confirmation container
-        if (!confirmedLocation || confirmedLocation !== location) {
-            confirmationMessage.textContent = `Did you mean: ${location}?`;
-            confirmationContainer.classList.add('visible');
-            confirmedLocation = location;
-            return;
-        }
+    function fetchDirectCity(query) {
+        const url = `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(query)}&limit=5&appid=${apiKey}`;
+        console.log('Fetching direct city data from URL:', url);
 
-        const apiUrlMetric = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(location)}&appid=${apiKey}&units=metric`;
-        const apiUrlImperial = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(location)}&appid=${apiKey}&units=imperial`;
-        console.log('Fetching weather data from URL:', apiUrlMetric, apiUrlImperial);
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                if (data.length > 0) {
+                    fetchWeatherData(data[0]);
+                } else {
+                    displayError("Please select a valid city from the suggestions.");
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching direct city data:', error);
+                displayError("Failed to fetch city data. Please try again.");
+            });
+    }
+
+    function fetchWeatherData(location) {
+        const { name, state, country, lat, lon } = location;
+        const locationString = `${name},${state ? state + ',' : ''}${country}`;
+        const apiUrlMetric = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric`;
+        const apiUrlImperial = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=imperial`;
 
         displayLoading(true);
 
         Promise.all([fetch(apiUrlMetric), fetch(apiUrlImperial)])
-            .then(responses => Promise.all(responses.map(response => {
-                if (!response.ok) {
-                    throw new Error(`Network response was not ok: ${response.statusText}`);
-                }
-                return response.json();
-            })))
+            .then(responses => Promise.all(responses.map(response => response.json())))
             .then(data => {
                 displayLoading(false);
                 hideSplashScreen();
                 const [dataMetric, dataImperial] = data;
-                console.log('Weather data fetched:', dataMetric, dataImperial);
-
-                // Convert UNIX timestamp to local time
-                const sunrise = new Date(dataMetric.sys.sunrise * 1000).toLocaleTimeString();
-                const sunset = new Date(dataMetric.sys.sunset * 1000).toLocaleTimeString();
-
-                document.getElementById('temperature').innerHTML =
-                    `<span class="temperature">${dataMetric.main.temp}°C</span> / <span class="temperature">${dataImperial.main.temp}°F</span>`;
-                document.getElementById('weather').textContent = dataMetric.weather[0].description;
-                document.getElementById('humidity').textContent = dataMetric.main.humidity + '%';
-                document.getElementById('wind-speed').innerHTML =
-                    `<span class="temperature">${dataMetric.wind.speed} m/s</span> / <span class="temperature">${dataImperial.wind.speed} mph</span>`;
-                document.getElementById('sunrise').textContent = sunrise;
-                document.getElementById('sunset').textContent = sunset;
-                const iconUrl = `https://openweathermap.org/img/wn/${dataMetric.weather[0].icon}@2x.png`;
-                document.getElementById('weather-icon').src = iconUrl;
-
-                // Apply weather theme based on weather condition
-                applyWeatherTheme(dataMetric.weather[0].main);
-
-                // Show weather info with animation
-                const weatherInfo = document.getElementById('weather-info');
-                weatherInfo.classList.add('visible');
-                weatherInfo.style.display = 'block';
-
-                // Fetch and display forecast data
-                fetchForecast(dataMetric.coord.lat, dataMetric.coord.lon);
+                displayWeatherData(dataMetric, dataImperial);
+                fetchForecast(lat, lon);
             })
             .catch(error => {
                 displayLoading(false);
                 displayError(error.message);
                 console.error('Error:', error);
             });
-    });
+    }
 
-    document.getElementById('theme-switcher').addEventListener('click', function() {
-        toggleTheme();
-    });
+    function displayWeatherData(dataMetric, dataImperial) {
+        const sunrise = new Date(dataMetric.sys.sunrise * 1000).toLocaleTimeString();
+        const sunset = new Date(dataMetric.sys.sunset * 1000).toLocaleTimeString();
+
+        document.getElementById('temperature').innerHTML =
+            `<span class="temperature">${dataMetric.main.temp}°C</span> / <span class="temperature">${dataImperial.main.temp}°F</span>`;
+        document.getElementById('weather').textContent = dataMetric.weather[0].description;
+        document.getElementById('humidity').textContent = dataMetric.main.humidity + '%';
+        document.getElementById('wind-speed').innerHTML =
+            `<span class="temperature">${dataMetric.wind.speed} m/s</span> / <span class="temperature">${dataImperial.wind.speed} mph</span>`;
+        document.getElementById('sunrise').textContent = sunrise;
+        document.getElementById('sunset').textContent = sunset;
+        const iconUrl = `https://openweathermap.org/img/wn/${dataMetric.weather[0].icon}@2x.png`;
+        document.getElementById('weather-icon').src = iconUrl;
+
+        applyWeatherTheme(dataMetric.weather[0].main);
+
+        const weatherInfo = document.getElementById('weather-info');
+        weatherInfo.classList.add('visible');
+        weatherInfo.style.display = 'block';
+    }
 
     confirmationYes.addEventListener('click', function() {
         confirmationContainer.classList.remove('visible');
@@ -194,52 +164,51 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     function fetchForecast(lat, lon) {
-        const apiKey = '1888b231e8cf712ed8c8809887434fe5';
         const apiUrlMetric = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric`;
         const apiUrlImperial = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${apiKey}&units=imperial`;
-        console.log('Fetching forecast data from URL:', apiUrlMetric, apiUrlImperial);
 
         Promise.all([fetch(apiUrlMetric), fetch(apiUrlImperial)])
-            .then(responses => Promise.all(responses.map(response => {
-                if (!response.ok) {
-                    throw new Error(`Network response was not ok: ${response.statusText}`);
-                }
-                return response.json();
-            })))
+            .then(responses => Promise.all(responses.map(response => response.json())))
             .then(data => {
                 const [dataMetric, dataImperial] = data;
-                console.log('Forecast data fetched:', dataMetric, dataImperial);
-
-                const forecastContainer = document.getElementById('forecast');
-                forecastContainer.innerHTML = '';
-
-                for (let i = 0; i < dataMetric.list.length; i += 8) {
-                    const dayDataMetric = dataMetric.list[i];
-                    const dayDataImperial = dataImperial.list[i];
-                    const date = new Date(dayDataMetric.dt * 1000).toLocaleDateString();
-                    const tempMetric = dayDataMetric.main.temp + '°C';
-                    const tempImperial = dayDataImperial.main.temp + '°F';
-                    const iconUrl = `https://openweathermap.org/img/wn/${dayDataMetric.weather[0].icon}.png`;
-
-                    const forecastDay = document.createElement('div');
-                    forecastDay.classList.add('forecast-day');
-                    forecastDay.innerHTML = `
-                        <p>${date}</p>
-                        <img src="${iconUrl}" alt="Weather Icon">
-                        <p><span class="temperature">${tempMetric}</span> / <span class="temperature">${tempImperial}</span></p>
-                    `;
-
-                    forecastContainer.appendChild(forecastDay);
-                }
-
-                const forecastContainerParent = document.getElementById('forecast-container');
-                forecastContainerParent.classList.add('visible');
+                displayForecastData(dataMetric, dataImperial);
             })
             .catch(error => {
                 displayError(error.message);
                 console.error('Error:', error);
             });
     }
+
+    function displayForecastData(dataMetric, dataImperial) {
+        const forecastContainer = document.getElementById('forecast');
+        forecastContainer.innerHTML = '';
+
+        for (let i = 0; i < dataMetric.list.length; i += 8) {
+            const dayDataMetric = dataMetric.list[i];
+            const dayDataImperial = dataImperial.list[i];
+            const date = new Date(dayDataMetric.dt * 1000).toLocaleDateString();
+            const tempMetric = dayDataMetric.main.temp + '°C';
+            const tempImperial = dayDataImperial.main.temp + '°F';
+            const iconUrl = `https://openweathermap.org/img/wn/${dayDataMetric.weather[0].icon}.png`;
+
+            const forecastDay = document.createElement('div');
+            forecastDay.classList.add('forecast-day');
+            forecastDay.innerHTML = `
+                <p>${date}</p>
+                <img src="${iconUrl}" alt="Weather Icon">
+                <p><span class="temperature">${tempMetric}</span> / <span class="temperature">${tempImperial}</span></p>
+            `;
+
+            forecastContainer.appendChild(forecastDay);
+        }
+
+        const forecastContainerParent = document.getElementById('forecast-container');
+        forecastContainerParent.classList.add('visible');
+    }
+
+    document.getElementById('theme-switcher').addEventListener('click', function() {
+        toggleTheme();
+    });
 
     function applyWeatherTheme(weather) {
         const themes = {
