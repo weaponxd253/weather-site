@@ -822,6 +822,16 @@ main {
     gap: 6px;
 }
 
+
+.empty-state {
+    width: 100%;
+    margin: 0;
+    padding: 18px;
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    color: var(--muted);
+    background: color-mix(in srgb, var(--panel-strong), transparent 18%);
+}
 .spinner {
     display: none;
     width: 28px;
@@ -1111,3 +1121,4 @@ main {
         transition-duration: 0.01ms !important;
     }
 }
+

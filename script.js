@@ -1,5 +1,8 @@
 document.addEventListener('DOMContentLoaded', function() {
+    // Demo-only frontend key. Production should proxy OpenWeather requests through a backend with an environment-held key.
     const apiKey = '1888b231e8cf712ed8c8809887434fe5';
+    const requestTimeoutMs = 10000;
+    const utils = window.WeatherUtils;
     const splashScreen = document.getElementById('splash-screen');
     const cityInput = document.getElementById('city-input');
     const clearCity = document.getElementById('clear-city');
@@ -30,25 +33,16 @@ document.addEventListener('DOMContentLoaded', function() {
     };
     const weatherThemeClasses = ['clear-theme', 'cloudy-theme', 'rain-theme', 'storm-theme', 'snowy-theme', 'night-theme', 'sunny-theme', 'rainy-theme'];
     const appState = {
-        unit: localStorage.getItem(storageKeys.unit) || 'metric',
+        unit: localStorage.getItem(storageKeys.unit) === 'imperial' ? 'imperial' : 'metric',
         currentLocation: null,
         currentWeather: null,
         forecast: null,
-        recentSearches: readStoredLocations(storageKeys.recents),
-        favoriteLocations: readStoredLocations(storageKeys.favorites),
-        expandedForecastIndex: null
-    };
-
-    const states = {
-        'AL': 'Alabama', 'AK': 'Alaska', 'AZ': 'Arizona', 'AR': 'Arkansas', 'CA': 'California', 'CO': 'Colorado',
-        'CT': 'Connecticut', 'DE': 'Delaware', 'FL': 'Florida', 'GA': 'Georgia', 'HI': 'Hawaii', 'ID': 'Idaho',
-        'IL': 'Illinois', 'IN': 'Indiana', 'IA': 'Iowa', 'KS': 'Kansas', 'KY': 'Kentucky', 'LA': 'Louisiana',
-        'ME': 'Maine', 'MD': 'Maryland', 'MA': 'Massachusetts', 'MI': 'Michigan', 'MN': 'Minnesota', 'MS': 'Mississippi',
-        'MO': 'Missouri', 'MT': 'Montana', 'NE': 'Nebraska', 'NV': 'Nevada', 'NH': 'New Hampshire', 'NJ': 'New Jersey',
-        'NM': 'New Mexico', 'NY': 'New York', 'NC': 'North Carolina', 'ND': 'North Dakota', 'OH': 'Ohio', 'OK': 'Oklahoma',
-        'OR': 'Oregon', 'PA': 'Pennsylvania', 'RI': 'Rhode Island', 'SC': 'South Carolina', 'SD': 'South Dakota',
-        'TN': 'Tennessee', 'TX': 'Texas', 'UT': 'Utah', 'VT': 'Vermont', 'VA': 'Virginia', 'WA': 'Washington',
-        'WV': 'West Virginia', 'WI': 'Wisconsin', 'WY': 'Wyoming'
+        recentSearches: utils.readStoredLocations(localStorage, storageKeys.recents, 5),
+        favoriteLocations: utils.readStoredLocations(localStorage, storageKeys.favorites, 8),
+        expandedForecastIndex: null,
+        requestId: 0,
+        activeWeatherController: null,
+        activeSuggestionController: null
     };
 
     const awesomplete = new Awesomplete(cityInput, {
@@ -59,6 +53,7 @@ document.addEventListener('DOMContentLoaded', function() {
     setTimeout(hideSplashScreen, 800);
     renderUnitToggle();
     renderSavedLocations();
+    updateNetworkStatus();
 
     cityInput.addEventListener('input', function() {
         const query = cityInput.value.trim();
@@ -70,6 +65,7 @@ document.addEventListener('DOMContentLoaded', function() {
             awesomplete.list = [];
             suggestionStatus.textContent = '';
             showLoadingSuggestions(false);
+            abortController('activeSuggestionController');
             return;
         }
 
@@ -90,6 +86,7 @@ document.addEventListener('DOMContentLoaded', function() {
         suggestionStatus.textContent = '';
         clearCity.classList.add('hidden');
         cityInput.focus();
+        abortController('activeSuggestionController');
     });
 
     getWeatherButton.addEventListener('click', handleWeatherSubmit);
@@ -101,6 +98,12 @@ document.addEventListener('DOMContentLoaded', function() {
         const isDark = document.body.classList.toggle('dark-mode');
         themeLabel.textContent = isDark ? 'Light' : 'Theme';
         this.setAttribute('aria-label', isDark ? 'Switch to light theme' : 'Switch theme');
+    });
+
+    window.addEventListener('offline', updateNetworkStatus);
+    window.addEventListener('online', function() {
+        updateNetworkStatus();
+        displayError('Back online. You can refresh the weather now.');
     });
 
     document.addEventListener('click', function(event) {
@@ -142,32 +145,38 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function fetchCitySuggestions(query) {
-        const url = `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(query)}&limit=5&appid=${apiKey}`;
+        if (!navigator.onLine) {
+            suggestionStatus.textContent = 'You are offline.';
+            return;
+        }
+
+        abortController('activeSuggestionController');
+        appState.activeSuggestionController = new AbortController();
+        const url = `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(query)}&limit=8&appid=${apiKey}`;
         console.log('Fetching city suggestions from URL:', url);
 
         showLoadingSuggestions(true);
         suggestionStatus.textContent = 'Looking up cities...';
 
-        fetch(url)
-            .then(ensureOkResponse)
-            .then(response => response.json())
+        fetchJson(url, appState.activeSuggestionController.signal)
             .then(data => {
-                citySuggestions = data.map(city => ({
-                    label: formatCityLabel(city),
-                    value: normalizeLocation(city)
+                citySuggestions = utils.normalizeGeocodingResults(data, 5).map(city => ({
+                    label: city.label,
+                    value: city
                 }));
-
                 awesomplete.list = citySuggestions.map(suggestion => suggestion.label);
                 suggestionStatus.textContent = citySuggestions.length ? '' : 'No matching cities found.';
-                showLoadingSuggestions(false);
             })
             .catch(error => {
+                if (error.name === 'AbortError') {
+                    return;
+                }
                 console.error('Error fetching city suggestions:', error);
                 citySuggestions = [];
                 awesomplete.list = [];
-                suggestionStatus.textContent = 'Suggestions are unavailable right now.';
-                showLoadingSuggestions(false);
-            });
+                suggestionStatus.textContent = utils.mapFetchError(error);
+            })
+            .finally(() => showLoadingSuggestions(false));
     }
 
     function handleWeatherSubmit() {
@@ -176,6 +185,10 @@ document.addEventListener('DOMContentLoaded', function() {
         if (input === '') {
             displayError('Please enter a city name.');
             cityInput.focus();
+            return;
+        }
+        if (!navigator.onLine) {
+            displayError('You are offline. Showing the last loaded weather, if available.');
             return;
         }
 
@@ -189,32 +202,54 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function fetchDirectCity(query) {
-        const url = `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(query)}&limit=5&appid=${apiKey}`;
+        if (!navigator.onLine) {
+            displayError('You are offline. Check your connection and try again.');
+            return;
+        }
+
+        const requestId = beginWeatherRequest();
+        const url = `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(query)}&limit=8&appid=${apiKey}`;
         console.log('Fetching direct city data from URL:', url);
 
         displayLoading(true);
 
-        fetch(url)
-            .then(ensureOkResponse)
-            .then(response => response.json())
+        fetchJson(url, appState.activeWeatherController.signal)
             .then(data => {
-                if (data.length === 0) {
-                    displayLoading(false);
-                    displayError('No matching city was found. Try adding a state or country.');
+                if (!isLatestRequest(requestId)) {
                     return;
                 }
-
-                fetchWeatherData(normalizeLocation(data[0]));
+                const locations = utils.normalizeGeocodingResults(data, 5);
+                if (locations.length === 0) {
+                    displayError('No matching city was found. Try adding a state or country.');
+                    endWeatherRequest(requestId);
+                    return;
+                }
+                fetchWeatherData(locations[0], requestId);
             })
             .catch(error => {
+                if (!isLatestRequest(requestId) || error.name === 'AbortError') {
+                    return;
+                }
                 console.error('Error fetching direct city data:', error);
-                displayLoading(false);
-                displayError('Failed to fetch city data. Please try again.');
+                displayError(utils.mapFetchError(error));
+                endWeatherRequest(requestId);
             });
     }
 
-    function fetchWeatherData(location) {
-        const normalizedLocation = normalizeLocation(location);
+    function fetchWeatherData(location, existingRequestId) {
+        const normalizedLocation = utils.normalizeLocation(location);
+        if (!normalizedLocation) {
+            displayError('That location could not be used. Please choose another city.');
+            endWeatherRequest(existingRequestId);
+            return;
+        }
+        if (!navigator.onLine) {
+            displayError('You are offline. Check your connection and try again.');
+            endWeatherRequest(existingRequestId);
+            return;
+        }
+
+        const requestId = existingRequestId || beginWeatherRequest();
         const { lat, lon } = normalizedLocation;
         const apiUrlMetric = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric`;
         const apiUrlImperial = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=imperial`;
@@ -227,67 +262,80 @@ document.addEventListener('DOMContentLoaded', function() {
         forecastContainerParent.classList.add('is-loading');
         weatherInfo.classList.add('is-loading');
 
-        Promise.all([fetch(apiUrlMetric), fetch(apiUrlImperial)])
-            .then(responses => Promise.all(responses.map(ensureOkResponse)))
-            .then(responses => Promise.all(responses.map(response => response.json())))
+        Promise.all([
+            fetchJson(apiUrlMetric, appState.activeWeatherController.signal),
+            fetchJson(apiUrlImperial, appState.activeWeatherController.signal)
+        ])
             .then(data => {
-                const [dataMetric, dataImperial] = data;
-                ensureWeatherPayload(dataMetric);
-                ensureWeatherPayload(dataImperial);
-                appState.currentLocation = enrichLocation(normalizedLocation, dataMetric);
+                if (!isLatestRequest(requestId)) {
+                    return;
+                }
+                const dataMetric = utils.normalizeWeatherPayload(data[0]);
+                const dataImperial = utils.normalizeWeatherPayload(data[1]);
+                appState.currentLocation = utils.enrichLocation(normalizedLocation, dataMetric);
                 appState.currentWeather = { metric: dataMetric, imperial: dataImperial };
+                appState.forecast = null;
                 appState.expandedForecastIndex = null;
                 addRecentSearch(appState.currentLocation);
                 renderCurrentWeather();
-                fetchForecast(lat, lon);
+                fetchForecast(lat, lon, requestId);
             })
             .catch(error => {
+                if (!isLatestRequest(requestId) || error.name === 'AbortError') {
+                    return;
+                }
                 console.error('Error:', error);
-                displayError(error.message || 'Failed to fetch weather. Please try again.');
-            })
-            .finally(() => {
-                displayLoading(false);
-                weatherInfo.classList.remove('is-loading');
+                displayError(utils.mapFetchError(error));
+                endWeatherRequest(requestId);
             });
     }
 
-    function fetchForecast(lat, lon) {
+    function fetchForecast(lat, lon, requestId) {
         const apiUrlMetric = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric`;
         const apiUrlImperial = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${apiKey}&units=imperial`;
 
-        Promise.all([fetch(apiUrlMetric), fetch(apiUrlImperial)])
-            .then(responses => Promise.all(responses.map(ensureOkResponse)))
-            .then(responses => Promise.all(responses.map(response => response.json())))
+        Promise.all([
+            fetchJson(apiUrlMetric, appState.activeWeatherController.signal),
+            fetchJson(apiUrlImperial, appState.activeWeatherController.signal)
+        ])
             .then(data => {
-                appState.forecast = { metric: data[0], imperial: data[1] };
+                if (!isLatestRequest(requestId)) {
+                    return;
+                }
+                appState.forecast = {
+                    metric: utils.normalizeForecastPayload(data[0]),
+                    imperial: utils.normalizeForecastPayload(data[1])
+                };
                 renderHourlyForecast();
                 renderForecast();
             })
             .catch(error => {
+                if (!isLatestRequest(requestId) || error.name === 'AbortError') {
+                    return;
+                }
                 console.error('Error:', error);
+                appState.forecast = { metric: { list: [] }, imperial: { list: [] } };
+                renderHourlyForecast();
+                renderForecast();
                 displayError('Current weather loaded, but the forecast is unavailable.');
             })
-            .finally(() => {
-                hourlyContainer.classList.remove('is-loading');
-                forecastContainerParent.classList.remove('is-loading');
-            });
+            .finally(() => endWeatherRequest(requestId));
     }
 
     function renderCurrentWeather() {
-        if (!appState.currentWeather) {
+        if (!appState.currentWeather || !appState.currentLocation) {
             return;
         }
 
         const dataMetric = appState.currentWeather.metric;
-        const dataImperial = appState.currentWeather.imperial;
         const activeData = getActiveWeatherData();
         const activeUnit = getUnitSymbol();
-        const sunrise = new Date(dataMetric.sys.sunrise * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-        const sunset = new Date(dataMetric.sys.sunset * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        const sunrise = formatTime(dataMetric.sys.sunrise);
+        const sunset = formatTime(dataMetric.sys.sunset);
         const condition = dataMetric.weather[0].description;
         const iconCode = dataMetric.weather[0].icon;
         const iconUrl = `https://openweathermap.org/img/wn/${iconCode}@2x.png`;
-        const updatedAt = new Date(dataMetric.dt * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        const updatedAt = formatTime(dataMetric.dt);
 
         document.getElementById('location-name').textContent = appState.currentLocation.label;
         document.getElementById('temperature').innerHTML = `${Math.round(activeData.main.temp)}&deg;${activeUnit}`;
@@ -316,8 +364,15 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         const forecast = appState.forecast[appState.unit];
-        forecast.list.slice(0, 8).forEach((hourData, index) => {
-            const timeText = new Date(hourData.dt * 1000).toLocaleTimeString([], { hour: 'numeric' });
+        const hours = Array.isArray(forecast.list) ? forecast.list.slice(0, 8) : [];
+        if (hours.length === 0) {
+            hourlyForecast.innerHTML = '<p class="empty-state">Hourly forecast is unavailable for this location.</p>';
+            hourlyContainer.classList.add('visible');
+            return;
+        }
+
+        hours.forEach((hourData, index) => {
+            const timeText = formatTime(hourData.dt, { hour: 'numeric' });
             const condition = hourData.weather[0].description;
             const iconUrl = `https://openweathermap.org/img/wn/${hourData.weather[0].icon}.png`;
             const card = document.createElement('article');
@@ -346,13 +401,20 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const activeForecast = appState.forecast[appState.unit];
         const metricForecast = appState.forecast.metric;
-        const days = activeForecast.list.filter((_, index) => index % 8 === 0).slice(0, 5);
-        const metricDays = metricForecast.list.filter((_, index) => index % 8 === 0).slice(0, 5);
+        const activeList = Array.isArray(activeForecast.list) ? activeForecast.list : [];
+        const metricList = Array.isArray(metricForecast.list) ? metricForecast.list : [];
+        const days = activeList.filter((_, index) => index % 8 === 0).slice(0, 5);
+        const metricDays = metricList.filter((_, index) => index % 8 === 0).slice(0, 5);
+
+        if (days.length === 0) {
+            forecastContainer.innerHTML = '<p class="empty-state">5-day forecast is unavailable for this location.</p>';
+            forecastContainerParent.classList.add('visible');
+            return;
+        }
 
         days.forEach((dayData, index) => {
-            const metricDay = metricDays[index];
-            const date = new Date(dayData.dt * 1000);
-            const dateText = date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+            const metricDay = metricDays[index] || dayData;
+            const dateText = formatDate(dayData.dt);
             const iconUrl = `https://openweathermap.org/img/wn/${dayData.weather[0].icon}@2x.png`;
             const condition = dayData.weather[0].description;
             const isToday = index === 0;
@@ -434,8 +496,7 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        appState.recentSearches = [location, ...appState.recentSearches.filter(item => item.key !== location.key)].slice(0, 5);
-        writeStoredLocations(storageKeys.recents, appState.recentSearches);
+        appState.recentSearches = utils.writeStoredLocations(localStorage, storageKeys.recents, [location, ...appState.recentSearches], 5);
         renderSavedLocations();
     }
 
@@ -445,13 +506,10 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         const isFavorite = appState.favoriteLocations.some(item => item.key === appState.currentLocation.key);
-        if (isFavorite) {
-            appState.favoriteLocations = appState.favoriteLocations.filter(item => item.key !== appState.currentLocation.key);
-        } else {
-            appState.favoriteLocations = [appState.currentLocation, ...appState.favoriteLocations].slice(0, 8);
-        }
-
-        writeStoredLocations(storageKeys.favorites, appState.favoriteLocations);
+        const favorites = isFavorite
+            ? appState.favoriteLocations.filter(item => item.key !== appState.currentLocation.key)
+            : [appState.currentLocation, ...appState.favoriteLocations];
+        appState.favoriteLocations = utils.writeStoredLocations(localStorage, storageKeys.favorites, favorites, 8);
         renderSavedLocations();
         updateFavoriteButton();
     }
@@ -475,48 +533,12 @@ document.addEventListener('DOMContentLoaded', function() {
         return appState.unit === 'metric' ? `${speed.toFixed(1)} m/s` : `${speed.toFixed(1)} mph`;
     }
 
-    function normalizeLocation(location) {
-        const lat = Number(location.lat);
-        const lon = Number(location.lon);
-        const normalized = {
-            name: location.name || '',
-            state: location.state || '',
-            country: location.country || '',
-            lat,
-            lon
-        };
-        normalized.label = location.label || formatLocationLabel(normalized);
-        normalized.key = location.key || `${lat.toFixed(4)},${lon.toFixed(4)}`;
-        return normalized;
+    function formatTime(timestamp, options) {
+        return new Date(timestamp * 1000).toLocaleTimeString([], options || { hour: 'numeric', minute: '2-digit' });
     }
 
-    function enrichLocation(location, weatherData) {
-        const enriched = normalizeLocation(location);
-        if (!enriched.name) {
-            enriched.name = weatherData.name || 'Current location';
-        }
-        if (!enriched.country) {
-            enriched.country = weatherData.sys.country || '';
-        }
-        enriched.label = formatLocationLabel(enriched);
-        return enriched;
-    }
-
-    function formatCityLabel(city) {
-        return formatLocationLabel(city);
-    }
-
-    function formatLocationLabel(location) {
-        const state = getStateName(location.state);
-        return [location.name, state, location.country].filter(Boolean).join(', ') || 'Current location';
-    }
-
-    function getStateName(state) {
-        if (!state) {
-            return '';
-        }
-
-        return states[state.toUpperCase()] || state;
+    function formatDate(timestamp) {
+        return new Date(timestamp * 1000).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
     }
 
     function applyWeatherTheme(weather, iconCode) {
@@ -548,11 +570,7 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('loading-spinner').style.display = show ? 'block' : 'none';
         getWeatherButton.disabled = show;
         getWeatherLabel.textContent = show ? 'Loading...' : 'Get Weather';
-        if (show) {
-            weatherInfo.classList.add('is-loading');
-        } else {
-            weatherInfo.classList.remove('is-loading');
-        }
+        weatherInfo.classList.toggle('is-loading', show);
     }
 
     function showLoadingSuggestions(show) {
@@ -572,32 +590,73 @@ document.addEventListener('DOMContentLoaded', function() {
         errorMessage.classList.remove('visible');
     }
 
-    function ensureOkResponse(response) {
-        if (!response.ok) {
-            throw new Error('Weather service returned an error. Please try again.');
-        }
-
-        return response;
-    }
-
-    function ensureWeatherPayload(data) {
-        if (!data || Number(data.cod) >= 400) {
-            throw new Error(data && data.message ? data.message : 'Weather data was unavailable.');
+    function updateNetworkStatus() {
+        if (!navigator.onLine) {
+            displayError('You are offline. Existing weather remains visible, but new searches need a connection.');
         }
     }
 
-    function readStoredLocations(key) {
-        try {
-            const stored = JSON.parse(localStorage.getItem(key) || '[]');
-            return Array.isArray(stored) ? stored.map(normalizeLocation).filter(location => Number.isFinite(location.lat) && Number.isFinite(location.lon)) : [];
-        } catch (error) {
-            console.warn('Failed to read stored locations:', error);
-            return [];
+    function beginWeatherRequest() {
+        abortController('activeWeatherController');
+        appState.activeWeatherController = new AbortController();
+        appState.requestId += 1;
+        return appState.requestId;
+    }
+
+    function isLatestRequest(requestId) {
+        return requestId === appState.requestId;
+    }
+
+    function endWeatherRequest(requestId) {
+        if (!requestId || isLatestRequest(requestId)) {
+            displayLoading(false);
+            weatherInfo.classList.remove('is-loading');
+            hourlyContainer.classList.remove('is-loading');
+            forecastContainerParent.classList.remove('is-loading');
         }
     }
 
-    function writeStoredLocations(key, locations) {
-        localStorage.setItem(key, JSON.stringify(locations));
+    function abortController(name) {
+        if (appState[name]) {
+            appState[name].abort();
+            appState[name] = null;
+        }
+    }
+
+    function fetchJson(url, signal) {
+        const timeoutController = new AbortController();
+        const timeout = setTimeout(() => timeoutController.abort(), requestTimeoutMs);
+        const onAbort = () => timeoutController.abort();
+        if (signal) {
+            signal.addEventListener('abort', onAbort, { once: true });
+        }
+
+        return fetch(url, { signal: timeoutController.signal })
+            .then(async response => {
+                const text = await response.text();
+                let data = null;
+                try {
+                    data = text ? JSON.parse(text) : null;
+                } catch (error) {
+                    throw new utils.WeatherServiceError('Weather service returned malformed data.', { status: response.status, code: 'bad_payload' });
+                }
+                if (!response.ok) {
+                    throw new utils.WeatherServiceError(data && data.message ? data.message : 'Weather service returned an error.', { status: response.status, code: 'api_error' });
+                }
+                return data;
+            })
+            .catch(error => {
+                if (timeoutController.signal.aborted && !(signal && signal.aborted)) {
+                    throw new utils.WeatherServiceError('Request timed out.', { code: 'timeout' });
+                }
+                throw error;
+            })
+            .finally(() => {
+                clearTimeout(timeout);
+                if (signal) {
+                    signal.removeEventListener('abort', onAbort);
+                }
+            });
     }
 
     function closeGeolocationPrompt(rememberChoice) {
@@ -612,7 +671,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
         geolocationAllow.addEventListener('click', function() {
             closeGeolocationPrompt(true);
-            displayLoading(true);
             navigator.geolocation.getCurrentPosition(
                 function(position) {
                     fetchWeatherData({
@@ -636,3 +694,6 @@ document.addEventListener('DOMContentLoaded', function() {
         displayError('Geolocation is not supported by this browser. Search for a city instead.');
     }
 });
+
+
+
