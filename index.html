@@ -8,61 +8,143 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/awesomplete/1.1.5/awesomplete.min.css">
 </head>
 <body>
-    <div id="splash-screen" class="splash-screen" role="alert">
+    <div id="splash-screen" class="splash-screen" role="status" aria-live="polite">
         <div class="splash-content">
-            <h1>Welcome to the Weather App</h1>
-            <div class="splash-spinner spinner" aria-label="Loading..."></div>
+            <h1>Weather App</h1>
+            <div class="splash-spinner spinner" aria-label="Loading"></div>
         </div>
     </div>
-    
-    <header>
-        <h1>Weather App</h1>
-        <button id="theme-switcher" aria-label="Switch Theme">Switch Theme</button>
-    </header>
-    <main>
-        <div id="weather-container">
-            <label for="city-input">Enter city name</label>
-            <input type="text" id="city-input" class="awesomplete" placeholder="Enter city name or city, state abbreviation" aria-describedby="city-input-desc">
-            <div id="city-input-desc" class="sr-only">Start typing a city name or city, state abbreviation and select from the suggestions.</div>
-            <div id="loading-suggestions-spinner" class="spinner" role="status" aria-live="polite">
-                <span class="sr-only">Loading suggestions...</span>
+
+    <div class="app-shell">
+        <header class="app-header">
+            <div>
+                <p class="eyebrow">Local forecast</p>
+                <h1>Weather App</h1>
             </div>
-            <button id="get-weather" aria-label="Get Weather">Get Weather</button>
-            <div id="loading-spinner" class="spinner" role="status" aria-live="polite">
-                <span class="sr-only">Loading...</span>
+            <div class="header-actions">
+                <div class="unit-toggle" role="group" aria-label="Temperature unit">
+                    <button id="unit-c" class="unit-button" type="button" aria-pressed="true">C</button>
+                    <button id="unit-f" class="unit-button" type="button" aria-pressed="false">F</button>
+                </div>
+                <button id="theme-switcher" class="ghost-button theme-button" type="button" aria-label="Switch theme">
+                    <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a7 7 0 1 0 7 7 5.2 5.2 0 0 1-7-7Z"></path></svg>
+                    <span id="theme-label">Theme</span>
+                </button>
             </div>
-            <div id="weather-info" aria-live="polite">
-                <img id="weather-icon" alt="Weather Icon">
-                <p>Temperature: <span id="temperature"></span> <button class="tooltip" aria-label="Current temperature in Celsius and Fahrenheit">?</button></p>
-                <p>Weather: <span id="weather"></span></p>
-                <p>Humidity: <span id="humidity"></span> <button class="tooltip" aria-label="Current humidity percentage">?</button></p>
-                <p>Wind Speed: <span id="wind-speed"></span> <button class="tooltip" aria-label="Current wind speed in meters per second and miles per hour">?</button></p>
-                <p>Sunrise: <span id="sunrise"></span></p>
-                <p>Sunset: <span id="sunset"></span></p>
+        </header>
+
+        <main>
+            <section class="search-panel" aria-label="Weather search">
+                <label for="city-input">City or place</label>
+                <div class="search-row">
+                    <div class="input-wrap">
+                        <input type="text" id="city-input" class="awesomplete" placeholder="Search city or city, state" aria-describedby="city-input-desc" autocomplete="off">
+                        <button id="clear-city" class="icon-button hidden" type="button" aria-label="Clear city search">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg>
+                        </button>
+                    </div>
+                    <button id="get-weather" class="primary-button" type="button"><span id="get-weather-label">Get Weather</span></button>
+                </div>
+                <div id="city-input-desc" class="sr-only">Start typing a city name or city and state, then select from the suggestions.</div>
+                <div class="status-row" aria-live="polite">
+                    <div id="loading-suggestions-spinner" class="spinner small-spinner" role="status">
+                        <span class="sr-only">Loading suggestions...</span>
+                    </div>
+                    <span id="suggestion-status"></span>
+                </div>
+                <div class="saved-locations" aria-label="Saved locations">
+                    <div id="recent-searches" class="chip-row hidden" aria-label="Recent searches"></div>
+                    <div id="favorite-locations" class="chip-row hidden" aria-label="Favorite locations"></div>
+                </div>
+            </section>
+
+            <section id="weather-info" class="weather-panel" aria-live="polite">
+                <div class="weather-hero">
+                    <div class="hero-copy">
+                        <div class="location-row">
+                            <p id="location-name" class="location-name">Choose a location</p>
+                            <button id="favorite-current" class="favorite-button" type="button" aria-label="Add current location to favorites" aria-pressed="false">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3 6.4 20.2 7.5 14 3 9.6l6.2-.9L12 3Z"></path></svg>
+                            </button>
+                        </div>
+                        <p id="weather" class="condition-text">Current conditions will appear here.</p>
+                        <p id="weather-meta" class="weather-meta">Search a city to begin.</p>
+                    </div>
+                    <div class="hero-icon-wrap">
+                        <img id="weather-icon" alt="" aria-hidden="true">
+                    </div>
+                </div>
+
+                <div class="temperature-row">
+                    <div>
+                        <span class="metric-label">Temperature</span>
+                        <p id="temperature" class="temperature-value">--</p>
+                    </div>
+                    <div class="feels-like-card">
+                        <span class="metric-label">Feels Like</span>
+                        <strong id="feels-like">--</strong>
+                    </div>
+                    <div id="loading-spinner" class="spinner" role="status" aria-live="polite">
+                        <span class="sr-only">Loading weather...</span>
+                    </div>
+                </div>
+
+                <div class="metric-grid" aria-label="Weather details">
+                    <div class="metric-card">
+                        <span class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3s6 7 6 11a6 6 0 0 1-12 0c0-4 6-11 6-11Z"></path></svg></span>
+                        <span class="metric-label">Humidity</span>
+                        <strong id="humidity">--</strong>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 8h10a3 3 0 1 0-3-3M4 12h15a3 3 0 1 1-3 3M3 16h8"></path></svg></span>
+                        <span class="metric-label">Wind</span>
+                        <strong id="wind-speed">--</strong>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 18h16M6 14a6 6 0 0 1 12 0M12 3v4M5 7l3 3M19 7l-3 3"></path></svg></span>
+                        <span class="metric-label">Sunrise</span>
+                        <strong id="sunrise">--</strong>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 18h16M6 14a6 6 0 0 1 12 0M12 21v-4M5 11l3-3M19 11l-3-3"></path></svg></span>
+                        <span class="metric-label">Sunset</span>
+                        <strong id="sunset">--</strong>
+                    </div>
+                </div>
+            </section>
+
+            <section id="hourly-container" class="hourly-panel" aria-live="polite">
+                <div class="section-heading">
+                    <p class="eyebrow">Next 24 hours</p>
+                    <h2>Hourly</h2>
+                </div>
+                <div id="hourly-forecast" class="hourly-strip"></div>
+            </section>
+
+            <section id="forecast-container" class="forecast-panel" aria-live="polite">
+                <div class="section-heading">
+                    <p class="eyebrow">Next 5 days</p>
+                    <h2>Forecast</h2>
+                </div>
+                <div id="forecast" class="forecast-grid"></div>
+            </section>
+
+            <div id="error-message" class="toast" role="alert" aria-live="assertive"></div>
+        </main>
+    </div>
+
+    <div id="geolocation-permission" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="geolocation-title">
+        <div class="modal-card">
+            <p class="eyebrow">Quick start</p>
+            <h2 id="geolocation-title">Use your current location?</h2>
+            <p>Show local weather automatically, or search for a city manually.</p>
+            <div class="modal-actions">
+                <button id="geolocation-allow" class="primary-button" type="button">Use Location</button>
+                <button id="geolocation-deny" class="ghost-button" type="button">Not Now</button>
             </div>
-            <div id="forecast-container">
-                <h2>5-Day Forecast</h2>
-                <div id="forecast"></div>
-            </div>
-            <div id="error-message" role="alert" aria-live="assertive"></div>
         </div>
-        <div id="confirmation-container" class="hidden">
-            <p id="confirmation-message"></p>
-            <button id="confirmation-yes">Yes</button>
-            <button id="confirmation-no">No</button>
-        </div>
-        <div id="popup" class="popup hidden" role="dialog" aria-modal="true">
-            <div id="popup-content">
-                <button id="popup-close" aria-label="Close">&times;</button>
-                <p id="popup-text"></p>
-            </div>
-        </div>
-        <div id="geolocation-permission" class="hidden">
-            <p>Would you like to allow geolocation to automatically find your location?</p>
-            <button id="geolocation-allow">Allow</button>
-            <button id="geolocation-deny">Deny</button>
-        </div>
-    </main>
+    </div>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/awesomplete/1.1.5/awesomplete.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.10.4/gsap.min.js"></script>
     <script src="script.js"></script>
