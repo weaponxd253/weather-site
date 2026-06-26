@@ -69,7 +69,27 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        debounceTimer = setTimeout(() => fetchCitySuggestions(query), 300);
+        const classification = utils.classifySearchInput(query);
+        if (classification.type === 'us_zip') {
+            awesomplete.list = [];
+            suggestionStatus.textContent = 'Press Enter to search this ZIP code.';
+            showLoadingSuggestions(false);
+            return;
+        }
+        if (classification.type === 'unsupported_postal') {
+            awesomplete.list = [];
+            suggestionStatus.textContent = 'Postal codes currently need a 5-digit US ZIP.';
+            showLoadingSuggestions(false);
+            return;
+        }
+        if (classification.type === 'us_state') {
+            awesomplete.list = [];
+            suggestionStatus.textContent = `${classification.label} is a state. Add a city or ZIP, like Seattle, ${classification.value}.`;
+            showLoadingSuggestions(false);
+            return;
+        }
+
+        debounceTimer = setTimeout(() => fetchCitySuggestions(classification.value), 300);
     });
 
     cityInput.addEventListener('keydown', function(event) {
@@ -192,15 +212,69 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
+        const classification = utils.classifySearchInput(input);
+        if (classification.type === 'us_zip') {
+            fetchZipLocation(classification.value, classification.country);
+            return;
+        }
+        if (classification.type === 'unsupported_postal') {
+            displayError('Postal code search currently supports 5-digit US ZIP codes. Try a city and country instead.');
+            return;
+        }
+        if (classification.type === 'us_state') {
+            displayError(`${classification.label} is a state. Add a city or ZIP code, like Seattle, ${classification.value}.`);
+            return;
+        }
+
         const selectedCity = citySuggestions.find(suggestion => suggestion.label === input);
         if (selectedCity) {
             fetchWeatherData(selectedCity.value);
             return;
         }
 
-        fetchDirectCity(input);
+        fetchDirectCity(classification.value);
     }
 
+    function fetchZipLocation(zip, country) {
+        if (!navigator.onLine) {
+            displayError('You are offline. Check your connection and try again.');
+            return;
+        }
+
+        const requestId = beginWeatherRequest();
+        const url = `https://api.openweathermap.org/geo/1.0/zip?zip=${encodeURIComponent(`${zip},${country || 'US'}`)}&appid=${apiKey}`;
+        console.log('Fetching ZIP location from URL:', url);
+
+        displayLoading(true);
+
+        fetchJson(url, appState.activeWeatherController.signal)
+            .then(data => {
+                if (!isLatestRequest(requestId)) {
+                    return;
+                }
+                const location = utils.normalizeLocation({
+                    name: data.name || zip,
+                    country: data.country || country || 'US',
+                    lat: data.lat,
+                    lon: data.lon,
+                    label: `${zip}, ${data.name || 'US ZIP'}, ${data.country || country || 'US'}`
+                });
+                if (!location) {
+                    displayError('That ZIP code could not be resolved. Check the digits and try again.');
+                    endWeatherRequest(requestId);
+                    return;
+                }
+                fetchWeatherData(location, requestId);
+            })
+            .catch(error => {
+                if (!isLatestRequest(requestId) || error.name === 'AbortError') {
+                    return;
+                }
+                console.error('Error fetching ZIP location:', error);
+                displayError(utils.mapFetchError(error));
+                endWeatherRequest(requestId);
+            });
+    }
     function fetchDirectCity(query) {
         if (!navigator.onLine) {
             displayError('You are offline. Check your connection and try again.');
@@ -693,7 +767,6 @@ document.addEventListener('DOMContentLoaded', function() {
     } else if (!navigator.geolocation) {
         displayError('Geolocation is not supported by this browser. Search for a city instead.');
     }
-});
-
+})
 
 

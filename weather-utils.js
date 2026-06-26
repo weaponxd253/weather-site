@@ -16,6 +16,10 @@
         'TN': 'Tennessee', 'TX': 'Texas', 'UT': 'Utah', 'VT': 'Vermont', 'VA': 'Virginia', 'WA': 'Washington',
         'WV': 'West Virginia', 'WI': 'Wisconsin', 'WY': 'Wyoming'
     };
+    const stateNameToAbbreviation = Object.keys(states).reduce((acc, abbreviation) => {
+        acc[states[abbreviation].toLowerCase()] = abbreviation;
+        return acc;
+    }, {});
 
     class WeatherServiceError extends Error {
         constructor(message, options) {
@@ -24,6 +28,76 @@
             this.status = options && options.status;
             this.code = options && options.code;
         }
+    }
+
+    function normalizeSearchQuery(input) {
+        return cleanText(input).replace(/\s+/g, ' ').replace(/,+$/g, '').trim();
+    }
+
+    function classifySearchInput(input) {
+        const query = normalizeSearchQuery(input);
+        if (!query) {
+            return { type: 'empty', value: '' };
+        }
+
+        const usZipMatch = query.match(/^(\d{5})(?:-\d{4})?$/);
+        if (usZipMatch) {
+            return { type: 'us_zip', value: usZipMatch[1], country: 'US' };
+        }
+
+        if (/^[A-Za-z]\d[A-Za-z][ -]?\d[A-Za-z]\d$/.test(query)) {
+            return { type: 'unsupported_postal', value: query.toUpperCase().replace(/\s+/g, ' '), country: 'CA' };
+        }
+
+        const stateCode = getUSStateCode(query);
+        if (stateCode) {
+            return { type: 'us_state', value: stateCode, label: states[stateCode] };
+        }
+
+        const cityState = parseCityState(query);
+        if (cityState) {
+            return { type: 'city_state', value: `${cityState.city},${cityState.stateCode},US`, city: cityState.city, state: cityState.stateCode, country: 'US' };
+        }
+
+        return { type: 'place', value: query };
+    }
+
+    function parseCityState(query) {
+        const commaParts = query.split(',').map(part => part.trim()).filter(Boolean);
+        if (commaParts.length >= 2) {
+            const stateCode = getUSStateCode(commaParts[1]);
+            if (stateCode && commaParts[0]) {
+                return { city: commaParts[0], stateCode };
+            }
+        }
+
+        const words = query.split(' ').filter(Boolean);
+        if (words.length < 2) {
+            return null;
+        }
+
+        for (let stateWordCount = Math.min(2, words.length - 1); stateWordCount >= 1; stateWordCount -= 1) {
+            const possibleState = words.slice(words.length - stateWordCount).join(' ');
+            const stateCode = getUSStateCode(possibleState);
+            const city = words.slice(0, words.length - stateWordCount).join(' ');
+            if (stateCode && city) {
+                return { city, stateCode };
+            }
+        }
+
+        return null;
+    }
+
+    function getUSStateCode(value) {
+        const normalized = cleanText(value).replace(/\./g, '').toLowerCase();
+        if (!normalized) {
+            return '';
+        }
+        const upper = normalized.toUpperCase();
+        if (states[upper]) {
+            return upper;
+        }
+        return stateNameToAbbreviation[normalized] || '';
     }
 
     function getStateName(state) {
@@ -174,7 +248,7 @@
 
     function normalizeForecastItem(item) {
         try {
-            const normalized = normalizeWeatherPayload({
+            return normalizeWeatherPayload({
                 cod: 200,
                 dt: item.dt,
                 weather: item.weather,
@@ -183,7 +257,6 @@
                 sys: {},
                 coord: {}
             });
-            return normalized;
         } catch (_) {
             return null;
         }
@@ -248,17 +321,19 @@
 
     return {
         WeatherServiceError,
+        classifySearchInput,
         dedupeLocations,
         enrichLocation,
         formatLocationLabel,
         getStateName,
+        getUSStateCode,
         mapFetchError,
         normalizeForecastPayload,
         normalizeGeocodingResults,
         normalizeLocation,
+        normalizeSearchQuery,
         normalizeWeatherPayload,
         readStoredLocations,
         writeStoredLocations
     };
 });
-

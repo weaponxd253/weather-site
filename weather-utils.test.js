@@ -19,6 +19,17 @@ function createStorage(initial) {
     };
 }
 
+
+(function classifiesSearchInputs() {
+    assert.deepStrictEqual(utils.classifySearchInput('98499'), { type: 'us_zip', value: '98499', country: 'US' });
+    assert.deepStrictEqual(utils.classifySearchInput('98499-1234'), { type: 'us_zip', value: '98499', country: 'US' });
+    assert.strictEqual(utils.classifySearchInput('Washington').type, 'us_state');
+    assert.strictEqual(utils.classifySearchInput('WA').value, 'WA');
+    assert.deepStrictEqual(utils.classifySearchInput('Lakewood WA'), { type: 'city_state', value: 'Lakewood,WA,US', city: 'Lakewood', state: 'WA', country: 'US' });
+    assert.deepStrictEqual(utils.classifySearchInput('Lakewood, Washington'), { type: 'city_state', value: 'Lakewood,WA,US', city: 'Lakewood', state: 'WA', country: 'US' });
+    assert.strictEqual(utils.classifySearchInput('K1A 0B1').type, 'unsupported_postal');
+    assert.deepStrictEqual(utils.classifySearchInput('Paris'), { type: 'place', value: 'Paris' });
+})();
 (function normalizesAndDedupesLocations() {
     const locations = utils.normalizeGeocodingResults([
         { name: 'Lakewood', state: 'WA', country: 'US', lat: 47.17, lon: -122.52 },
@@ -90,3 +101,4 @@ function createStorage(initial) {
 })();
 
 console.log('weather-utils tests passed');
+

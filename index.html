@@ -38,14 +38,14 @@
                 <label for="city-input">City or place</label>
                 <div class="search-row">
                     <div class="input-wrap">
-                        <input type="text" id="city-input" class="awesomplete" placeholder="Search city or city, state" aria-describedby="city-input-desc" autocomplete="off">
+                        <input type="text" id="city-input" class="awesomplete" placeholder="Try Lakewood, WA or 98499" aria-describedby="city-input-desc" autocomplete="off">
                         <button id="clear-city" class="icon-button hidden" type="button" aria-label="Clear city search">
                             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg>
                         </button>
                     </div>
                     <button id="get-weather" class="primary-button" type="button"><span id="get-weather-label">Get Weather</span></button>
                 </div>
-                <div id="city-input-desc" class="sr-only">Start typing a city name or city and state, then select from the suggestions.</div>
+                <div id="city-input-desc" class="sr-only">Start typing a city, city and state, or 5-digit US ZIP, then select from suggestions when shown.</div>
                 <div class="status-row" aria-live="polite">
                     <div id="loading-suggestions-spinner" class="spinner small-spinner" role="status">
                         <span class="sr-only">Loading suggestions...</span>
@@ -151,4 +151,5 @@
     <script src="script.js"></script>
 </body>
 </html>
+
 
